@@ -7,14 +7,18 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
-
+#include <signal.h>
 #define ERR_EXIT(m) \
 	do \
 	{ \
 		perror(m) ;\
 		exit(EXIT_FAILURE) ; \
 	} while(0) 
-
+void handler(int sig)
+{
+	printf("recv a sig = %d" , sig) ;
+	exit(EXIT_SUCCESS) ;
+}
 int main(void)
 {
 	int listenfd ;
@@ -40,20 +44,19 @@ int main(void)
 
 	pid_t pid ;
 	
-	while(1)
-	  {
-	    if( ( conn = accept( listenfd , ( struct sockaddr* )&peeraddr , &peerlen ) ) < 0 )
+
+	if( ( conn = accept( listenfd , ( struct sockaddr* )&peeraddr , &peerlen ) ) < 0 )
 		ERR_EXIT("accept") ;
 
-	    printf( "ip = %s port = %d \n",inet_ntoa(peeraddr.sin_addr),ntohs(peeraddr.sin_port) ) ;
+	printf( "ip = %s port = %d \n",inet_ntoa(peeraddr.sin_addr),ntohs(peeraddr.sin_port) ) ;
 	    
-	    pid = fork() ;
-	    if( pid == -1 )
-	      	ERR_EXIT("fork") ;
-	    char recvbuf[1024] ;
-	    if( pid == 0 )
-	      {
-		close(listenfd) ;
+	pid = fork() ;
+	if( pid == -1 )
+	    ERR_EXIT("fork") ;
+	char recvbuf[1024] ;
+	char sendbuf[1024] ;
+	if( pid == 0 )
+	{
 		while(1)
 		  {
 		    memset( recvbuf , 0 , sizeof(recvbuf) ) ;
@@ -66,14 +69,21 @@ int main(void)
 		    if( ret == -1 )
 		      ERR_EXIT("read") ;
 		    fputs( recvbuf , stdout) ;
-		    write( conn , recvbuf , ret ) ;
 		  }
+		kill(pid,SIGUSR1) ;
+		close(conn) ;
+		close(listenfd) ;
 		exit(EXIT_SUCCESS) ;
-	      }
-	    else
-	      close(conn) ;
-
-	  }
+	}
+	else 
+	{
+		signal(SIGUSR1,handler) ;
+		while( fgets( sendbuf , sizeof(sendbuf) , stdin ) != NULL )
+		{
+			write( conn , sendbuf , sizeof(recvbuf) ) ;
+			memset( sendbuf , 0 , sizeof(sendbuf) ) ;
+		};
+	}
 	
 	close(conn) ;
 	close(listenfd) ;

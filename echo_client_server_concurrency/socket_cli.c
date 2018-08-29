@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <signal.h>
 
 #define ERR_EXIT(m) \
 	do \
@@ -14,6 +15,12 @@
 		perror(m) ;\
 		exit(EXIT_FAILURE) ; \
 	} while(0) 
+
+void handler(int sig)
+{
+	printf("recv a sig = %d\n",sig) ;
+	exit(EXIT_SUCCESS) ;
+}
 
 int main(void)
 {
@@ -31,13 +38,32 @@ int main(void)
 	
 	char sendbuf[1024] = {0} ;
 	char recvbuf[1024] = {0} ;
-	while( fgets( sendbuf , sizeof(sendbuf) , stdin ) != NULL )
+	pid_t pid ;
+	pid = fork() ;
+	if( 0 == pid )
 	{
-		write( sock , sendbuf , strlen(sendbuf) ) ;
-		read( sock , recvbuf , sizeof(recvbuf) ) ;
-		
-		fputs( recvbuf , stdout ) ;
+		signal(SIGUSR1,handler) ;
+		while( fgets( sendbuf , sizeof(sendbuf) , stdin ) != NULL )
+		{
+			write( sock , sendbuf , strlen(sendbuf) ) ;
+			memset( recvbuf , 0 , sizeof(recvbuf) ) ;
+		}
 	}
+	else
+		while(1)
+		{
+		        memset( recvbuf , 0 , sizeof(recvbuf) ) ;
+			int ret = read( sock , recvbuf , sizeof(recvbuf) ) ;
+			if( -1 == ret )
+			  ERR_EXIT("read") ;
+			else if( ret == 0 )
+			  {
+			    printf("peer close\n") ;
+			    kill( pid,SIGUSR1 ) ;
+			    break ;
+			  }
+			fputs( recvbuf , stdout ) ;
+		}
 	close(sock) ;
 	return 0 ;
 }
